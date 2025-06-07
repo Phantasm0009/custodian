@@ -7,7 +7,8 @@ import {
   Routes,
   EmbedBuilder,
   ChannelType,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  MessageFlags
 } from 'discord.js';
 import { PrismaClient } from '@prisma/client';
 import { config } from 'dotenv';
@@ -124,10 +125,20 @@ class ArchiveMindBot {
           .setColor(0xff0000)
           .setTimestamp();
 
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
-        } else {
-          await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ 
+              embeds: [errorEmbed], 
+              flags: [MessageFlags.Ephemeral] 
+            });
+          } else {
+            await interaction.reply({ 
+              embeds: [errorEmbed], 
+              flags: [MessageFlags.Ephemeral] 
+            });
+          }
+        } catch (responseError) {
+          logger.error('Failed to send error response:', responseError);
         }
       }
     });
