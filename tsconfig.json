@@ -22,9 +22,7 @@
     "exactOptionalPropertyTypes": false,
     "incremental": false,
     "isolatedModules": false,
-    "noEmitOnError": false,
-    "suppressImplicitAnyIndexErrors": true,
-    "noStrictGenericChecks": true
+    "noEmitOnError": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts", "src/tests/**/*"],
