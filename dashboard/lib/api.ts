@@ -1,9 +1,8 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: process.env.BOT_API_URL || 'http://localhost:3001',
+  baseURL: typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000',
   headers: {
-    'Authorization': `Bearer ${process.env.BOT_API_SECRET}`,
     'Content-Type': 'application/json',
   },
 })

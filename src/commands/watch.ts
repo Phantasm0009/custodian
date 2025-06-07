@@ -6,6 +6,7 @@ import {
 } from 'discord.js';
 import type { SlashCommand } from '../types';
 import { getBotInstance } from '../lib/botInstance';
+import { retryWithBackoff } from '../lib/utils';
 
 /**
  * /watch command - Monitor a channel for auto-archiving
@@ -53,9 +54,14 @@ export const watchCommand: SlashCommand = {
         return;
       }
 
-      // Check bot permissions in target channel
-      const targetChannel = await bot.client.channels.fetch(channel.id);
-      if (!targetChannel || !targetChannel.isTextBased()) {
+      // Check bot permissions in target channel with rate limiting protection
+      const targetChannel = await retryWithBackoff(
+        () => bot.client.channels.fetch(channel.id),
+        2,
+        1000
+      );
+      
+      if (!targetChannel || !(targetChannel as any).isTextBased()) {
         await interaction.editReply('Invalid channel specified.');
         return;
       }

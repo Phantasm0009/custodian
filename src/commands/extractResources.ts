@@ -6,7 +6,7 @@ import {
 } from 'discord.js';
 import type { SlashCommand } from '../types';
 import { getBotInstance } from '../lib/botInstance';
-import { createSuccessEmbed, createErrorEmbed } from '../lib/utils';
+import { createSuccessEmbed, createErrorEmbed, retryWithBackoff } from '../lib/utils';
 import { logger } from '../lib/logger';
 
 /**
@@ -49,10 +49,14 @@ export const extractResourcesCommand: SlashCommand = {
       
       logger.info(`🔍 Manual resource extraction requested by ${interaction.user.tag} in #${channel.name} (${count} messages)`);
 
-      // Extract resources
-      const resources = await bot.rescueEngine.rescueResources(channel.id, count);
+      // Extract resources with rate limiting protection
+      const resources = await retryWithBackoff(
+        () => bot.rescueEngine.rescueResources(channel.id, count),
+        3,
+        2000 // 2 second base delay for resource extraction
+      );
 
-      if (resources.length === 0) {
+      if (!resources || (resources as any[]).length === 0) {
         await interaction.editReply({
           embeds: [createSuccessEmbed(
             '📋 Extraction Complete',
@@ -62,26 +66,30 @@ export const extractResourcesCommand: SlashCommand = {
         return;
       }
 
-      // Save resources to database
-      await bot.rescueEngine.saveResources(resources, 'manual-extract');
+      // Save resources to database with rate limiting protection
+      await retryWithBackoff(
+        () => bot.rescueEngine.saveResources(resources, channel.id),
+        3,
+        1000
+      );
 
-      const resourcesByType = resources.reduce((acc, resource) => {
+      const resourcesByType = (resources as any[]).reduce((acc, resource) => {
         acc[resource.type] = (acc[resource.type] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
 
       const typesList = Object.entries(resourcesByType)
-        .map(([type, count]) => `• ${count} ${type.toLowerCase()}${count > 1 ? 's' : ''}`)
+        .map(([type, count]) => `• ${count} ${type.toLowerCase()}${(count as number) > 1 ? 's' : ''}`)
         .join('\n');
 
       await interaction.editReply({
         embeds: [createSuccessEmbed(
           '✅ Resources Extracted',
-          `Successfully extracted **${resources.length}** resources from ${count} recent messages:\n\n${typesList}\n\nUse \`/find\` to search through extracted resources.`
+          `Successfully extracted **${(resources as any[]).length}** resources from ${count} recent messages:\n\n${typesList}\n\nUse \`/find\` to search through extracted resources.`
         )]
       });
 
-      logger.info(`✅ Manual extraction complete: ${resources.length} resources saved`);
+      logger.info(`✅ Manual extraction complete: ${(resources as any[]).length} resources saved`);
 
     } catch (error) {
       logger.error('Error in extract-resources command:', error);

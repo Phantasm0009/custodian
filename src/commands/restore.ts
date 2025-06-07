@@ -1,10 +1,14 @@
 import { 
   SlashCommandBuilder, 
   ChatInputCommandInteraction, 
-  PermissionFlagsBits 
+  PermissionFlagsBits,
+  ButtonBuilder,
+  ButtonStyle,
+  ActionRowBuilder
 } from 'discord.js';
 import type { SlashCommand } from '../types';
 import { getBotInstance } from '../lib/botInstance';
+import { retryWithBackoff } from '../lib/utils';
 
 /**
  * /restore command - Restore an archived channel
@@ -103,6 +107,19 @@ export const restoreCommand: SlashCommand = {
       const archivedChannel = archivedChannels[0];
       
       // Show confirmation with details
+      const confirmButton = new ButtonBuilder()
+        .setCustomId('restore_confirm')
+        .setLabel('✅ Confirm Restore')
+        .setStyle(ButtonStyle.Success);
+
+      const cancelButton = new ButtonBuilder()
+        .setCustomId('restore_cancel')
+        .setLabel('❌ Cancel')
+        .setStyle(ButtonStyle.Secondary);
+
+      const row = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(confirmButton, cancelButton);
+
       await interaction.editReply({
         embeds: [{
           title: '🔄 Restore Channel Confirmation',
@@ -115,64 +132,61 @@ export const restoreCommand: SlashCommand = {
               inline: false
             },
             {
-              name: '🔍 Resource Preview',              value: archivedChannel.resources.length > 0 
+              name: '🔍 Resource Preview',
+              value: archivedChannel.resources.length > 0 
                 ? archivedChannel.resources.slice(0, 3).map((r: any) => `• ${r.type}: ${r.fileName || r.url?.substring(0, 50) || 'Content preview'}`).join('\n')
                 : 'No resources were rescued from this channel',
               inline: false
             }
           ],
           footer: {
-            text: 'React with ✅ to confirm or ❌ to cancel within 30 seconds'
+            text: 'Click a button below to confirm or cancel within 30 seconds'
           }
-        }]
+        }],
+        components: [row]
       });
 
-      // Wait for confirmation
-      const confirmationMessage = await interaction.fetchReply();
-      await confirmationMessage.react('✅');
-      await confirmationMessage.react('❌');
-
-      const filter = (reaction: any, user: any) => {
-        return ['✅', '❌'].includes(reaction.emoji.name) && user.id === interaction.user.id;
-      };
+      // Wait for button interaction
+      const filter = (i: any) => i.user.id === interaction.user.id;
 
       try {
-        const collected = await confirmationMessage.awaitReactions({
-          filter,
-          max: 1,
-          time: 30000,
-          errors: ['time']
-        });
+        const buttonInteraction = await interaction.fetchReply().then(reply => 
+          reply.awaitMessageComponent({ 
+            filter, 
+            time: 30000 
+          })
+        );
 
-        const reaction = collected.first();
-        
-        if (reaction?.emoji.name === '❌') {
-          await interaction.editReply({
+        if (buttonInteraction.customId === 'restore_cancel') {
+          await buttonInteraction.update({
             embeds: [{
               title: '❌ Restoration Cancelled',
               description: 'Channel restoration was cancelled.',
               color: 0x95a5a6
-            }]
+            }],
+            components: []
           });
           return;
         }
 
-        if (reaction?.emoji.name === '✅') {
+        if (buttonInteraction.customId === 'restore_confirm') {
           // Proceed with restoration
-          await interaction.editReply({
+          await buttonInteraction.update({
             embeds: [{
               title: '🔄 Restoring Channel...',
               description: 'Please wait while the channel is being restored.',
               color: 0x3498db
-            }]
+            }],
+            components: []
           });
 
-          const result = await bot.archiveManager.restoreChannel(
-            archivedChannel.name,
-            interaction.guild.id
+          const result = await retryWithBackoff(
+            () => bot.archiveManager.restoreChannel(archivedChannel.name, interaction.guild!.id),
+            3,
+            1000
           );
 
-          if (result.success) {
+          if ((result as any).success) {
             await interaction.editReply({
               embeds: [{
                 title: '✅ Channel Restored Successfully',
@@ -181,7 +195,7 @@ export const restoreCommand: SlashCommand = {
                 fields: [
                   {
                     name: '📍 Restored Channel',
-                    value: `<#${result.channelId}>`,
+                    value: `<#${(result as any).channelId}>`,
                     inline: true
                   },
                   {
@@ -204,7 +218,8 @@ export const restoreCommand: SlashCommand = {
                   text: 'Restoration completed'
                 },
                 timestamp: new Date().toISOString()
-              }]
+              }],
+              components: []
             });
           } else {
             await interaction.editReply({
@@ -219,19 +234,22 @@ export const restoreCommand: SlashCommand = {
                     inline: false
                   }
                 ]
-              }]
+              }],
+              components: []
             });
           }
         }
 
       } catch (error) {
+        console.error('Button interaction timeout or error:', error);
         await interaction.editReply({
           embeds: [{
             title: '⏰ Confirmation Timeout',
             description: 'Restoration confirmation timed out. Please try the command again.',
             color: 0x95a5a6
-          }]
-        });
+          }],
+          components: []
+        }).catch(() => {}); // Ignore errors if interaction already expired
       }
 
     } catch (error) {

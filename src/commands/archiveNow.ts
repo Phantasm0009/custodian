@@ -1,11 +1,16 @@
 import { 
   SlashCommandBuilder, 
   ChatInputCommandInteraction, 
+  PermissionFlagsBits, 
   ChannelType,
-  PermissionFlagsBits 
+  ButtonBuilder,
+  ButtonStyle,
+  ActionRowBuilder
 } from 'discord.js';
-import type { SlashCommand } from '../types';
+import { SlashCommand } from '../types';
 import { getBotInstance } from '../lib/botInstance';
+import { createErrorEmbed, createSuccessEmbed, retryWithBackoff } from '../lib/utils';
+import { logger } from '../lib/logger';
 
 /**
  * /archive-now command - Immediately archive a channel
@@ -36,6 +41,7 @@ export const archiveNowCommand: SlashCommand = {
         .setMaxLength(200)
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels) as SlashCommandBuilder,
+  
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const bot = getBotInstance();
     try {
@@ -49,131 +55,125 @@ export const archiveNowCommand: SlashCommand = {
       if (!interaction.guild) {
         await interaction.editReply('This command can only be used in a server.');
         return;
-      }      // Safety check - prevent archiving important channels
+      }
+
       const channelName = (channel.name || '').toLowerCase();
       const protectedChannels = ['general', 'announcements', 'rules', 'welcome'];
       
       if (protectedChannels.some(protectedName => channelName.includes(protectedName))) {
         await interaction.editReply({
-          embeds: [{
-            title: '⚠️ Protected Channel',
-            description: `Channel <#${channel.id}> appears to be an important server channel and cannot be archived for safety reasons.`,
-            color: 0xe74c3c,
-            fields: [
-              {
-                name: 'Protected Channel Types',
-                value: protectedChannels.map(name => `• ${name}`).join('\n'),
-                inline: false
-              }
-            ]
-          }]
+          embeds: [createErrorEmbed(
+            '🛡️ Protected Channel',
+            `Channel "${channel.name}" appears to be a protected channel and cannot be archived. Protected channels include: ${protectedChannels.join(', ')}`
+          )]
         });
         return;
       }
 
-      // Confirmation for immediate archiving
+      // Use ActionRow with buttons instead of reactions to avoid rate limits
+      const confirmButton = new ButtonBuilder()
+        .setCustomId('archive_confirm')
+        .setLabel('✅ Confirm Archive')
+        .setStyle(ButtonStyle.Danger);
+
+      const cancelButton = new ButtonBuilder()
+        .setCustomId('archive_cancel')
+        .setLabel('❌ Cancel')
+        .setStyle(ButtonStyle.Secondary);
+
+      const row = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(confirmButton, cancelButton);
+
       await interaction.editReply({
         content: `⚠️ **Confirmation Required**\n\nYou are about to archive <#${channel.id}> immediately.\n\n**This action will:**\n• Delete the channel permanently\n• ${rescueResources ? 'Rescue valuable resources to the knowledge base' : 'NOT rescue any resources'}\n• Send a notification before deletion\n\n**Reason:** ${reason}`,
         embeds: [{
           title: '📦 Archive Confirmation',
-          description: 'React with ✅ to confirm or ❌ to cancel within 30 seconds.',
+          description: 'Click ✅ Confirm Archive or ❌ Cancel within 30 seconds.',
           color: 0xf39c12,
           footer: {
             text: 'This action cannot be undone easily'
           }
-        }]
+        }],
+        components: [row]
       });
 
-      // Wait for confirmation
-      const confirmationMessage = await interaction.fetchReply();
-      await confirmationMessage.react('✅');
-      await confirmationMessage.react('❌');
-
-      const filter = (reaction: any, user: any) => {
-        return ['✅', '❌'].includes(reaction.emoji.name) && user.id === interaction.user.id;
+      // Wait for button interaction instead of reactions
+      const filter = (i: any) => {
+        return (i.customId === 'archive_confirm' || i.customId === 'archive_cancel') && 
+               i.user.id === interaction.user.id;
       };
 
       try {
-        const collected = await confirmationMessage.awaitReactions({
-          filter,
-          max: 1,
-          time: 30000,
-          errors: ['time']
-        });
+        const buttonInteraction = await interaction.fetchReply().then(reply => 
+          reply.awaitMessageComponent({ 
+            filter, 
+            time: 30000 
+          })
+        );
 
-        const reaction = collected.first();
-        
-        if (reaction?.emoji.name === '❌') {
-          await interaction.editReply({
-            content: '❌ Archive operation cancelled.',
-            embeds: []
+        if (buttonInteraction.customId === 'archive_cancel') {
+          await buttonInteraction.update({
+            content: '❌ **Archive Cancelled**\n\nThe archive operation has been cancelled.',
+            embeds: [],
+            components: []
           });
           return;
         }
 
-        if (reaction?.emoji.name === '✅') {
-          // Proceed with archiving
+        // Proceed with archiving
+        await buttonInteraction.update({
+          content: '🔄 **Archiving in progress...**\n\nPlease wait while we archive the channel and rescue resources.',
+          embeds: [],
+          components: []
+        });
+
+        const result = await bot.archiveManager.archiveChannel(channel.id, {
+          inactivityDays: 0, // Immediate
+          rescueResources,
+          gracePeriodDays: 0,
+          preservePermissions: true,
+          notifyMembers: true
+        });
+
+        if (result.success) {
           await interaction.editReply({
-            content: '📦 Archiving channel... This may take a few moments.',
-            embeds: []
+            content: '',
+            embeds: [createSuccessEmbed(
+              '✅ Channel Archived Successfully',
+              `**Channel:** ${channel.name}\n**Resources Rescued:** ${result.resourceCount || 0}\n**Archive ID:** ${result.archivedChannelId}\n**Reason:** ${reason}\n\nUse \`/restore ${channel.name}\` to restore this channel if needed.`
+            )],
+            components: []
           });
-
-          const result = await bot.archiveManager.archiveChannel(channel.id, {
-            inactivityDays: 0, // Immediate
-            rescueResources,
-            gracePeriodDays: 0
+        } else {
+          await interaction.editReply({
+            content: '',
+            embeds: [createErrorEmbed(
+              '❌ Archive Failed',
+              'Failed to archive the channel. Please check bot permissions and try again.'
+            )],
+            components: []
           });
-
-          if (result.success) {
-            await interaction.editReply({
-              embeds: [{
-                title: '✅ Channel Archived Successfully',
-                description: `Channel **${channel.name}** has been archived.`,
-                color: 0x2ecc71,
-                fields: [
-                  {
-                    name: '📊 Resources Rescued',
-                    value: `${result.resourceCount || 0} valuable resources were saved to the knowledge base.`,
-                    inline: false
-                  },
-                  {
-                    name: '🔄 Restoration',
-                    value: `Use \`/restore ${channel.name}\` to restore this channel if needed.`,
-                    inline: false
-                  },
-                  {
-                    name: '📋 Archive Details',
-                    value: `**Reason:** ${reason}\n**Archived by:** <@${interaction.user.id}>\n**Archive ID:** \`${result.archivedChannelId}\``,
-                    inline: false
-                  }
-                ],
-                footer: {
-                  text: 'Archive completed'
-                },
-                timestamp: new Date().toISOString()
-              }]
-            });
-          } else {
-            await interaction.editReply({
-              embeds: [{
-                title: '❌ Archive Failed',
-                description: 'Failed to archive the channel. Please check bot permissions and try again.',
-                color: 0xe74c3c
-              }]
-            });
-          }
         }
 
       } catch (error) {
+        logger.error('Button interaction timeout or error:', error);
         await interaction.editReply({
-          content: '⏰ Confirmation timed out. Archive operation cancelled.',
-          embeds: []
-        });
+          content: '⏰ **Confirmation Timeout**\n\nArchive operation cancelled due to no response within 30 seconds.',
+          embeds: [],
+          components: []
+        }).catch(() => {}); // Ignore errors if interaction already expired
       }
 
     } catch (error) {
-      console.error('Error in archive-now command:', error);
-      await interaction.editReply('❌ An error occurred while archiving the channel.');
+      logger.error('Error in archive-now command:', error);
+      await interaction.editReply({
+        content: '',
+        embeds: [createErrorEmbed(
+          '❌ Archive Error',
+          'An error occurred while processing the archive request. Please try again.'
+        )],
+        components: []
+      }).catch(() => {}); // Ignore errors if interaction already expired
     }
   }
 };

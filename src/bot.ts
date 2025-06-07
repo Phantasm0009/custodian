@@ -101,44 +101,70 @@ class ArchiveMindBot {
       await this.cleanupGuildData(guild.id);
     });
 
-    // Interaction handling (slash commands)
+    // Interaction handling (slash commands and buttons)
     this.client.on(Events.InteractionCreate, async (interaction) => {
-      if (!interaction.isChatInputCommand()) return;
+      // Handle slash commands
+      if (interaction.isChatInputCommand()) {
+        const command = this.commands.get(interaction.commandName);
+        if (!command) {
+          logger.warn(`❌ Unknown command: ${interaction.commandName}`);
+          return;
+        }
 
-      const command = this.commands.get(interaction.commandName);
-      if (!command) {
-        logger.warn(`❌ Unknown command: ${interaction.commandName}`);
+        try {
+          // Log command usage for analytics
+          logger.info(`🔧 Command executed: ${interaction.commandName} by ${interaction.user.tag} in ${interaction.guild?.name}`);
+          
+          await command.execute(interaction);
+        } catch (error) {
+          logger.error(`❌ Error executing command ${interaction.commandName}:`, error);
+          
+          const errorEmbed = new EmbedBuilder()
+            .setTitle('⚠️ Command Error')
+            .setDescription('There was an error executing this command. Please try again later.')
+            .setColor(0xff0000)
+            .setTimestamp();
+
+          try {
+            if (interaction.replied || interaction.deferred) {
+              await interaction.followUp({ 
+                embeds: [errorEmbed], 
+                flags: [MessageFlags.Ephemeral] 
+              });
+            } else {
+              await interaction.reply({ 
+                embeds: [errorEmbed], 
+                flags: [MessageFlags.Ephemeral] 
+              });
+            }
+          } catch (responseError) {
+            logger.error('Failed to send error response:', responseError);
+          }
+        }
         return;
       }
 
-      try {
-        // Log command usage for analytics
-        logger.info(`🔧 Command executed: ${interaction.commandName} by ${interaction.user.tag} in ${interaction.guild?.name}`);
-        
-        await command.execute(interaction);
-      } catch (error) {
-        logger.error(`❌ Error executing command ${interaction.commandName}:`, error);
-        
-        const errorEmbed = new EmbedBuilder()
-          .setTitle('⚠️ Command Error')
-          .setDescription('There was an error executing this command. Please try again later.')
-          .setColor(0xff0000)
-          .setTimestamp();
-
+      // Handle button interactions (for confirmations)
+      if (interaction.isButton()) {
         try {
-          if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ 
-              embeds: [errorEmbed], 
-              flags: [MessageFlags.Ephemeral] 
-            });
-          } else {
-            await interaction.reply({ 
-              embeds: [errorEmbed], 
-              flags: [MessageFlags.Ephemeral] 
-            });
+          logger.info(`🔘 Button interaction: ${interaction.customId} by ${interaction.user.tag}`);
+          
+          // Button interactions are handled by the awaitMessageComponent in individual commands
+          // This event listener is just for logging and error handling
+          
+        } catch (error) {
+          logger.error('❌ Error handling button interaction:', error);
+          
+          try {
+            if (!interaction.replied && !interaction.deferred) {
+              await interaction.reply({
+                content: 'An error occurred while processing your request. Please try again.',
+                flags: [MessageFlags.Ephemeral]
+              });
+            }
+          } catch (responseError) {
+            logger.error('Failed to send button error response:', responseError);
           }
-        } catch (responseError) {
-          logger.error('Failed to send error response:', responseError);
         }
       }
     });

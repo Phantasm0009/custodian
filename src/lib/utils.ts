@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import { EmbedBuilder, Colors } from 'discord.js';
+import { logger } from './logger';
 
 /**
  * Utility functions for common operations across the bot
@@ -139,31 +140,67 @@ export function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Retry a function with exponential backoff
+ * Retry a function with exponential backoff and rate limit handling
  */
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries = 3,
-  baseDelay = 1000
+  baseDelay = 2000 // Increased default delay
 ): Promise<T> {
   let lastError: Error;
   
-  for (let i = 0; i <= maxRetries; i++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
-    } catch (error) {
-      lastError = error as Error;
+    } catch (error: any) {
+      lastError = error;
       
-      if (i === maxRetries) {
-        throw lastError;
+      // If this is a rate limit error, wait longer
+      if (error?.status === 429 || error?.code === 50035 || error?.message?.includes('rate limit')) {
+        // Use the retry-after from Discord if available, otherwise calculate based on attempt
+        const retryAfter = error?.retryAfter || (baseDelay * Math.pow(2, attempt + 1));
+        // Ensure minimum wait time of 5 seconds for rate limits
+        const waitTime = Math.max(retryAfter, 5000);
+        logger.warn(`Rate limited, waiting ${waitTime}ms before retry ${attempt + 1}/${maxRetries}`);
+        await sleep(waitTime);
+        continue;
       }
       
-      const delay = baseDelay * Math.pow(2, i);
-      await sleep(delay);
+      // For other errors, use exponential backoff
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        logger.warn(`Attempt ${attempt + 1} failed, retrying in ${delay}ms:`, error.message);
+        await sleep(delay);
+      }
     }
   }
   
   throw lastError!;
+}
+
+/**
+ * Add reactions with rate limit protection
+ */
+export async function addReactionsWithDelay(
+  message: any, 
+  reactions: string[], 
+  delayMs = 500
+): Promise<void> {
+  for (let i = 0; i < reactions.length; i++) {
+    try {
+      await retryWithBackoff(async () => {
+        await message.react(reactions[i]);
+      });
+      
+      // Add delay between reactions to avoid rate limits
+      if (i < reactions.length - 1) {
+        await sleep(delayMs);
+      }
+    } catch (error) {
+      logger.error(`Failed to add reaction ${reactions[i]}:`, error);
+      // Continue with next reaction even if one fails
+    }
+  }
 }
 
 /**

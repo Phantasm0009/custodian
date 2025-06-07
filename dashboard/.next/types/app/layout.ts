@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 // File: C:\Users\Pramod Tiwari\Downloads\discord-bot\dashboard\app\layout.tsx
-=======
-// File: /home/project/dashboard/app/layout.tsx
->>>>>>> ff2926dac213052e70dd22795681a7675e465ab8
 import * as entry from '../../../app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

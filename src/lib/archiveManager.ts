@@ -12,6 +12,7 @@ import {
 import { PrismaClient } from '@prisma/client';
 import { DateTime } from 'luxon';
 import { logger, ArchiveLogger } from './logger';
+import { retryWithBackoff } from './utils';
 import { RescueEngine } from './rescueEngine';
 import type { ArchiveOptions, DetectedResource } from '../types';
 
@@ -207,59 +208,35 @@ export class ArchiveManager {
   ): Promise<void> {
     try {
       const channel = await this.client.channels.fetch(channelId) as TextChannel;
-      if (!channel) return;
+      if (!channel?.isTextBased()) return;
 
       const embed = new EmbedBuilder()
-        .setTitle('⚠️ Channel Archive Warning')
+        .setTitle(this.getWarningMessage(warningType, daysRemaining))
+        .setDescription(
+          `This channel will be archived due to inactivity. ` +
+          `To prevent archiving, send a message or use \`/watch #${channel.name} [days]\` to extend the period.`
+        )
         .setColor(this.getWarningColor(warningType))
-        .setDescription(this.getWarningMessage(warningType, daysRemaining))
         .addFields([
-          {
-            name: '📊 Channel Activity',
-            value: `This channel will be archived if no messages are sent within ${daysRemaining} days.`,
-            inline: false
-          },
-          {
-            name: '🔄 How to Prevent Archiving',
-            value: 'Simply send a message in this channel to reset the inactivity timer.',
-            inline: false
-          },
-          {
-            name: '📦 What Happens When Archived',
-            value: 'Important resources (files, links, code) will be saved to the knowledge base before archiving.',
-            inline: false
-          }        ])
-        .setFooter({ 
-          text: 'Archivemind Bot • Use /watch to modify settings',
-          ...(this.client.user?.avatarURL() ? { iconURL: this.client.user.avatarURL()! } : {})
-        })
+          { name: '⏰ Time Remaining', value: `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''}`, inline: true },
+          { name: '📋 What happens next?', value: 'Resources will be rescued to the knowledge base', inline: true },
+          { name: '🔄 How to restore?', value: `Use \`/restore ${channel.name}\` after archiving`, inline: true }
+        ])
         .setTimestamp();
 
-      const row = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId(`postpone_archive_${channelId}`)
-            .setLabel('Postpone Archive (+7 days)')
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji('⏰'),
-          new ButtonBuilder()
-            .setCustomId(`archive_now_${channelId}`)
-            .setLabel('Archive Now')
-            .setStyle(ButtonStyle.Danger)
-            .setEmoji('📦')
-        );
-
-      await channel.send({ embeds: [embed], components: [row] });
-
-      // Record warning in database
-      await this.prisma.archiveWarning.create({
-        data: {
-          channelId,
-          warningType,
-          sentAt: new Date()
-        }
+      // Send warning message with rate limit protection
+      const warningMessage = await retryWithBackoff(async () => {
+        return await channel.send({ embeds: [embed] });
       });
 
+      // Pin the warning message with rate limit protection
+      if (warningMessage && warningType === 'FINAL_WARNING') {
+        await retryWithBackoff(async () => {
+          await warningMessage.pin();
+        });
+      }
+
+      // Log the warning (don't create database record to avoid foreign key issues)
       ArchiveLogger.logWarning(channel.name, warningType, daysRemaining);
 
     } catch (error) {

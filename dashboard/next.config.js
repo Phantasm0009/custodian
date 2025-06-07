@@ -1,11 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-<<<<<<< HEAD
-=======
-  experimental: {
-    appDir: true,
-  },
->>>>>>> ff2926dac213052e70dd22795681a7675e465ab8
   images: {
     domains: ['cdn.discordapp.com'],
   },

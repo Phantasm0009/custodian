@@ -1,6 +1,7 @@
 import { Client, Message, TextChannel, Attachment, Collection, FetchMessagesOptions } from 'discord.js';
 import { PrismaClient, ResourceType } from '@prisma/client';
 import { logger, ArchiveLogger } from './logger';
+import { retryWithBackoff, sleep } from './utils';
 import type { DetectedResource } from '../types';
 
 /**
@@ -69,9 +70,15 @@ export class RescueEngine {
       // Extract resources from messages
       const resources: DetectedResource[] = [];
       
-      for (const message of messages) {
+      for (let i = 0; i < messages.length; i++) {
+        const message = messages[i];
         const messageResources = await this.extractResourcesFromMessage(message);
         resources.push(...messageResources);
+        
+        // Add delay every 5 messages to avoid rate limits when fetching context
+        if (i > 0 && i % 5 === 0) {
+          await sleep(3000); // 3 second delay every 5 messages
+        }
       }
 
       // Filter out spam and duplicates
@@ -119,26 +126,43 @@ export class RescueEngine {
     return false;
   }
   /**
-   * Fetch messages from channel with pagination
+   * Fetch messages from channel with pagination and rate limit protection
    */
   private async fetchMessages(channel: TextChannel, limit: number): Promise<Message[]> {
     const messages: Message[] = [];
     let lastId: string | undefined;
-      while (messages.length < limit) {
+    
+    while (messages.length < limit) {
       const batchOptions: FetchMessagesOptions = {
-        limit: Math.min(100, limit - messages.length)
+        limit: Math.min(50, limit - messages.length) // Reduced batch size from 100 to 50
       };
       
       if (lastId) {
         batchOptions.before = lastId;
       }
       
-      const batch: Collection<string, Message> = await channel.messages.fetch(batchOptions);
-      
-      if (batch.size === 0) break;
-      
-      messages.push(...batch.values());
-      lastId = batch.last()?.id;
+      try {
+        // Use retryWithBackoff with longer delays to handle rate limits
+        const batch: Collection<string, Message> = await retryWithBackoff(
+          () => channel.messages.fetch(batchOptions),
+          5, // Increased retries
+          3000 // Increased base delay to 3 seconds
+        );
+        
+        if (batch.size === 0) break;
+        
+        messages.push(...batch.values());
+        lastId = batch.last()?.id;
+        
+        // Add longer delay between requests to avoid hitting rate limits
+        if (messages.length < limit && batch.size > 0) {
+          await sleep(5000); // Increased to 5 second delay between batches
+        }
+        
+      } catch (error) {
+        logger.error(`Failed to fetch messages from ${channel.name}:`, error);
+        break; // Stop fetching if we hit an error
+      }
     }
     
     return messages;
@@ -290,15 +314,21 @@ export class RescueEngine {
   }
 
   /**
-   * Get context from 3 preceding messages
+   * Get context from 3 preceding messages with rate limit protection
    */
   private async getMessageContext(message: Message): Promise<string> {
     try {
       const channel = message.channel as TextChannel;
-      const contextMessages = await channel.messages.fetch({
-        limit: 3,
-        before: message.id
-      });
+      
+      // Use retryWithBackoff with longer delays to handle rate limits
+      const contextMessages = await retryWithBackoff(
+        () => channel.messages.fetch({
+          limit: 3,
+          before: message.id
+        }),
+        3, // Increased retries
+        2000 // Increased base delay to 2 seconds
+      );
       
       return contextMessages
         .reverse()
