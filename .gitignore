@@ -79,3 +79,4 @@ TODO.md
 # Backup files
 *.backup
 *.bak
+.env
