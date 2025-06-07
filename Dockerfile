@@ -1,7 +1,7 @@
 # Use Node.js 18 Alpine for smaller image size
 FROM node:18-alpine
 
-# Install system dependencies needed for Puppeteer and canvas
+# Install system dependencies needed for Puppeteer, canvas, and Prisma compatibility
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -18,7 +18,9 @@ RUN apk add --no-cache \
     g++ \
     make \
     python3 \
-    openssl
+    openssl \
+    libc6-compat \
+    libstdc++
 
 # Set working directory
 WORKDIR /app
