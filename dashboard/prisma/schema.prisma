@@ -1,0 +1,176 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Note: pgvector extension removed - using text search for now
+}
+
+model ArchivedChannel {
+  id              String    @id @default(uuid())
+  originalId      String    @unique
+  name            String
+  category        String?
+  guildId         String
+  archivedAt      DateTime  @default(now())
+  restored        Boolean   @default(false)
+  restoredAt      DateTime?
+  inactivityDays  Int       @default(30)
+  
+  // Channel metadata
+  topic           String?
+  nsfw            Boolean   @default(false)
+  rateLimitPerUser Int?     // Slowmode
+  position        Int?
+  
+  // Permissions backup (JSON)
+  permissions     Json?
+    // Relations
+  resources       Resource[]
+  
+  @@map("archived_channels")
+}
+
+model Resource {
+  id              String        @id @default(uuid())
+  url             String
+  type            ResourceType
+  fileName        String?
+  fileSize        Int?
+  context         String?       // 3 preceding messages
+  content         String?       // For code blocks  authorId        String
+  authorName      String
+  originalMessageId String
+  createdAt       DateTime      @default(now())
+  savedTo         String?       // Destination channel ID
+  tags            String[]      @default([])
+  
+  // Vector embedding temporarily removed - will use text search instead
+  // embedding       Unsupported("vector(1536)")?
+  
+  // Relations
+  channel         ArchivedChannel @relation(fields: [channelId], references: [id])
+  channelId       String
+  
+  @@map("resources")
+  @@index([url])
+  @@index([fileName])
+  @@index([content])
+  @@index([tags])
+}
+
+model ArchiveWarning {
+  id              String    @id @default(uuid())
+  channelId       String    // References WatchedChannel.channelId (Discord channel ID)
+  warningType     WarningType
+  sentAt          DateTime  @default(now())
+  acknowledged    Boolean   @default(false)
+  
+  @@map("archive_warnings")
+}
+
+model WatchedChannel {
+  id              String    @id @default(uuid())
+  channelId       String    @unique
+  guildId         String
+  inactivityDays  Int       @default(30)
+  rescueResources Boolean   @default(true)
+  lastActivity    DateTime  @default(now())
+  watchedSince    DateTime  @default(now())
+  isActive        Boolean   @default(true)
+  
+  @@map("watched_channels")
+}
+
+model KnowledgeDigest {
+  id              String    @id @default(uuid())
+  guildId         String
+  timeframe       DigestTimeframe
+  generatedAt     DateTime  @default(now())
+  filePath        String?   // Path to generated PDF
+  resourceCount   Int
+  totalSize       BigInt    @default(0)
+  
+  @@map("knowledge_digests")
+}
+
+// User model for NextAuth
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+enum ResourceType {
+  FILE
+  LINK
+  CODE
+  PIN
+  IMAGE
+  DOCUMENT
+}
+
+enum WarningType {
+  SEVEN_DAYS
+  THREE_DAYS
+  ONE_DAY
+  FINAL_WARNING
+}
+
+enum DigestTimeframe {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}

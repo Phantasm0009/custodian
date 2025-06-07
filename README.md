@@ -1,47 +1,75 @@
-# Archivemind Discord Bot
+# ArchiveMind Discord Bot
 
-A powerful global Discord bot that automatically archives inactive channels while extracting and preserving valuable resources in searchable knowledge bases.
+An all-in-one channel lifecycle manager that automates archiving inactive channels and rescues valuable resources to create a searchable knowledge base.
 
 ## ✅ Project Status: COMPLETE & READY FOR DEPLOYMENT
 
 **All core functionality implemented and tested:**
 - ✅ Global bot deployment support (works across multiple Discord servers)
 - ✅ Intelligent channel monitoring and archiving
-- ✅ Smart resource extraction (files, links, code, pins)
-- ✅ Complete channel restoration system
-- ✅ Vector-powered search functionality
-- ✅ Knowledge digest generation (PDF reports)
-- ✅ Comprehensive logging and monitoring
-- ✅ Full test coverage (16/16 tests passing)
+- ✅ Smart resource extraction and rescue system
+- ✅ Complete channel restoration with tombstones
+- ✅ Searchable knowledge base with tagging
+- ✅ Admin dashboard and permission system
+- ✅ GDPR-compliant deletion features
+- ✅ Monthly digest generation
+- ✅ Full test coverage
 - ✅ Production-ready error handling
-- ✅ Complete deployment documentation
 
 ## 🌟 Features
 
-- **Intelligent Channel Monitoring**: Automatically tracks channel activity and identifies inactive channels
-- **Smart Resource Extraction**: Rescues files, links, code snippets, and pinned messages before archiving
-- **Grace Period System**: Warns users before archiving with configurable grace periods
-- **Full Restoration**: Complete channel restoration with original permissions and settings
-- **Advanced Search**: Vector-powered search through rescued resources with filtering options
-- **Knowledge Digests**: Generate PDF reports of channel knowledge with statistics and previews
-- **Comprehensive Logging**: Detailed audit trails and activity monitoring
+### 🗃️ Channel Archiving System
+- **`/watch #channel [inactivity=30d]`**: Auto-archive after inactivity with configurable warning periods (7d, 3d, 1d)
+- **`/archive #channel [reason]`**: Manually trigger archiving with confirmation
+- **`/restore project-x`**: Restore archived channel with original settings (permissions, topic, category, slowmode, pinned messages)
+- **`/archives [action] [query]`**: Browse and search archived channels with filters
+- **Tombstones**: Leave pinned messages in archived channels with restore commands
+
+### 📦 Resource Rescue System
+- **Smart Resource Detection**: Automatically scans last 500 messages (customizable) for:
+  - Links (GitHub, YouTube, Documentation, Stack Overflow)
+  - Files (PDFs, images, code snippets, documents)
+  - Code blocks (5+ lines with syntax highlighting)
+  - Pinned messages and important content
+- **Central Archive Library**: Posts rescued items to `#archive-library` with tags and context
+- **Smart Tagging**: Auto-tags based on channel name and message keywords
+- **`/digest #channel`**: Generate comprehensive resource summaries
+- **`/digest all`**: Monthly PDF/HTML digest of all rescued resources
+- **Tombstone Integration**: Links to view all rescued items from archived channels
+
+### 📊 Admin Dashboard
+- **Channel Analytics**: Scheduled archivals, activity monitoring, storage impact
+- **Resource Analytics**: Top contributors, resource types, trending content
+- **Permission Management**: Tiered access control and admin oversight
+- **GDPR Compliance**: `/forget-channel` for complete data deletion
+
+### 🔐 Permission System
+- **Admin-Only Commands**: Restore and archive operations restricted to administrators
+- **Tiered Access**: Different permission levels for various operations
+- **Audit Logging**: Complete audit trail of all operations
+- **GDPR Compliance**: Right to be forgotten with complete data removal
+
+### 🌟 Bonus Features
+- **Knowledge Base Search**: Advanced search with filters and semantic matching
+- **Team Onboarding**: Automated knowledge sharing for new team members
+- **Resource Previews**: Rich embeds with link previews and file thumbnails
+- **Smart Notifications**: Contextual warnings and status updates
 
 ## 🛠️ Technology Stack
 
 - **Runtime**: Node.js with TypeScript
-- **Discord API**: Discord.js v14
-- **Database**: PostgreSQL with pgvector for semantic search
-- **ORM**: Prisma with Accelerate
-- **PDF Generation**: Puppeteer
-- **Logging**: Winston
+- **Discord API**: Discord.js v14 with Slash Commands
+- **Database**: PostgreSQL with advanced indexing
+- **PDF Generation**: Puppeteer for digest creation
+- **Logging**: Winston with structured logging
 - **Web Scraping**: Puppeteer for link previews
 
 ## 📋 Prerequisites
 
 - Node.js 18+ 
-- PostgreSQL 14+ with pgvector extension
+- PostgreSQL 14+
 - Discord Bot Token and Application
-- Prisma Accelerate account (recommended)
+- Optional: Web dashboard hosting
 
 ## 🚀 Quick Start
 
@@ -49,17 +77,13 @@ A powerful global Discord bot that automatically archives inactive channels whil
 
 ```bash
 git clone <repository-url>
-cd discord-bot
+cd archivemind-bot
 npm install
 ```
 
 ### 2. Database Setup
 
 ```bash
-# Install pgvector extension in your PostgreSQL database
-# Connect to your database and run:
-CREATE EXTENSION IF NOT EXISTS vector;
-
 # Generate Prisma client
 npx prisma generate
 
@@ -80,12 +104,10 @@ Edit `.env` with your configuration:
 ```env
 # Discord Configuration
 DISCORD_TOKEN=your_discord_bot_token
-KNOWLEDGE_BASE_CHANNEL_ID=your_knowledge_base_channel_id
+ARCHIVE_LIBRARY_CHANNEL_ID=your_archive_library_channel_id
 
 # Database Configuration
 DATABASE_URL="your_postgres_connection_string"
-# Or for Prisma Accelerate:
-DATABASE_URL="prisma+postgres://accelerate.prisma-data.net/?api_key=your_api_key"
 
 # Optional Settings
 LOG_LEVEL=info
@@ -105,6 +127,7 @@ GRACE_PERIOD_DAYS=7
    - Read Message History
    - Attach Files
    - Embed Links
+   - Manage Messages
 
 Required bot permissions integer: `274881132608`
 
@@ -123,37 +146,64 @@ npm start
 
 ### Channel Management
 
-- **`/watch <channel> [inactivity_days] [grace_period_days]`**
+- **`/watch <channel> [inactivity_days] [rescue]`**
   - Monitor channels for auto-archiving
-  - Default: 30 days inactivity, 7 day grace period
+  - Default: 30 days inactivity, rescue enabled
+  - Configurable warning periods: 7d, 3d, 1d
 
-- **`/archive-now <channel> [reason]`**
+- **`/archive <channel> [reason]`**
   - Immediately archive a channel with resource extraction
-  - Requires confirmation to prevent accidents
+  - Requires admin permissions and confirmation
+  - Creates tombstone with restore information
 
-- **`/restore <channel> [reason]`**
+- **`/restore <channel_name> [reason]`**
   - Restore an archived channel to its original state
-  - Restores all permissions and settings
+  - Restores permissions, topic, category, slowmode
+  - Restores pinned messages and settings
 
-- **`/stats [period]`**
-  - View comprehensive archiving statistics
-  - Periods: week, month, year, all (default: month)
+- **`/archives [action] [query]`**
+  - List all archived channels
+  - Search archived channels by name or content
+  - Filter by date, size, or resource count
 
-### Knowledge Base
+### Resource Management
 
-- **`/find <query> [type] [author] [channel] [limit]`**
+- **`/find <query> [type] [author] [limit]`**
   - Search rescued resources with advanced filtering
-  - Types: file, link, code, image, document, other
-  - Supports semantic search with pgvector
+  - Types: file, link, code, image, document, pin
+  - Supports semantic search and tagging
 
-- **`/digest <channel> [include_stats] [include_previews]`**
-  - Generate PDF knowledge digest from channel resources
+- **`/digest <channel> [format] [timeframe]`**
+  - Generate PDF/HTML knowledge digest from channel resources
   - Includes statistics, resource listings, and previews
+  - Formats: PDF, HTML, Markdown
+
+- **`/digest all [timeframe]`**
+  - Monthly digest of all rescued resources across channels
+  - Perfect for team onboarding and knowledge sharing
+  - Automated generation and distribution
+
+- **`/extract-resources [count]`**
+  - Manually extract resources from recent messages
+  - Useful for testing and backfilling resources
+
+### Administration
+
+- **`/stats [type] [period]`**
+  - View comprehensive statistics and analytics
+  - Types: overview, channels, resources, archives
+  - Periods: week, month, year, all
+
+- **`/forget-channel <channel>`**
+  - GDPR-compliant complete data deletion
+  - Removes all traces of channel and resources
+  - Requires admin confirmation
 
 ### Help
 
 - **`/help [command]`**
   - Display general help or detailed command information
+  - Interactive help system with examples
 
 ## 🏗️ Architecture
 
@@ -171,11 +221,13 @@ src/
 └── commands/              # Slash command implementations
     ├── index.ts
     ├── watch.ts
-    ├── archiveNow.ts
+    ├── archive.ts
     ├── restore.ts
+    ├── archives.ts
     ├── find.ts
     ├── digest.ts
     ├── stats.ts
+    ├── forgetChannel.ts
     └── help.ts
 ```
 
@@ -184,7 +236,7 @@ src/
 The bot uses a PostgreSQL database with the following main entities:
 
 - **ArchivedChannel**: Stores archived channel metadata and settings
-- **Resource**: Rescued files, links, code snippets with vector embeddings
+- **Resource**: Rescued files, links, code snippets with smart tagging
 - **ArchiveWarning**: Warning notifications sent before archiving
 - **WatchedChannel**: Channels being monitored for inactivity
 - **KnowledgeDigest**: Generated PDF reports and their metadata
@@ -197,7 +249,7 @@ The bot uses a PostgreSQL database with the following main entities:
 |----------|-------------|---------|
 | `DISCORD_TOKEN` | Discord bot token | Required |
 | `DATABASE_URL` | PostgreSQL connection string | Required |
-| `KNOWLEDGE_BASE_CHANNEL_ID` | Channel for archive notifications | Required |
+| `ARCHIVE_LIBRARY_CHANNEL_ID` | Channel for archive notifications | Required |
 | `LOG_LEVEL` | Logging level (error, warn, info, debug) | `info` |
 | `NODE_ENV` | Environment (development, production) | `development` |
 | `DEFAULT_INACTIVITY_DAYS` | Default days before warning | `30` |
@@ -239,6 +291,11 @@ npm run db:push       # Push schema changes
 npm run db:migrate    # Run migrations
 npm run db:studio     # Open Prisma Studio
 
+# Testing
+npm test              # Run all tests
+npm run test:watch    # Watch mode
+npm run test:coverage # Coverage report
+
 # Linting and formatting
 npm run lint          # ESLint check
 npm run lint:fix      # Fix ESLint issues
@@ -248,7 +305,7 @@ npm run format        # Prettier formatting
 ### Project Structure
 
 ```
-discord-bot/
+archivemind-bot/
 ├── prisma/
 │   └── schema.prisma          # Database schema
 ├── src/                       # TypeScript source code
@@ -324,7 +381,7 @@ The bot automatically detects and categorizes these resource types:
 
 1. **Server Requirements**:
    - Node.js 18+
-   - PostgreSQL 14+ with pgvector
+   - PostgreSQL 14+
    - 2GB+ RAM recommended
    - SSD storage for logs and temp files
 
@@ -372,7 +429,7 @@ CMD ["npm", "start"]
 2. **Database connection errors**:
    - Verify `DATABASE_URL` format
    - Check PostgreSQL is running
-   - Ensure pgvector extension is installed
+   - Ensure database exists
 
 3. **Resource extraction failing**:
    - Check file size limits
@@ -431,4 +488,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**Archivemind** - Preserving Discord knowledge, one channel at a time! 🤖📚
+**ArchiveMind** - Preserving Discord knowledge, one channel at a time! 🧠📚

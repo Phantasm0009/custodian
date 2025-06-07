@@ -1,7 +1,8 @@
 import { 
   SlashCommandBuilder, 
   ChatInputCommandInteraction,
-  EmbedBuilder 
+  EmbedBuilder,
+  MessageFlags
 } from 'discord.js';
 import type { SlashCommand } from '../types';
 import { getBotInstance } from '../lib/botInstance';
@@ -149,12 +150,16 @@ export const findCommand: SlashCommand = {
         const additionalCount = resources.length - maxResourceEmbeds;
         await interaction.followUp({
           content: `📄 **${additionalCount} more result${additionalCount === 1 ? '' : 's'} available**\n\nUse a more specific query or increase the \`limit\` parameter to see more results.`,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
       }
     } catch (error) {
       console.error('Error in find command:', error);
-      await interaction.editReply('❌ An error occurred while searching resources.');
+      try {
+        await interaction.editReply('❌ An error occurred while searching resources.');
+      } catch (editError) {
+        console.error('Failed to edit reply:', editError);
+      }
     }
   }
 };

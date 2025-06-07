@@ -7,9 +7,11 @@ import { digestCommand } from './digest';
 import { statsCommand } from './stats';
 import { helpCommand } from './help';
 import { extractResourcesCommand } from './extractResources';
+import { archivesCommand } from './archives';
+import { forgetChannelCommand } from './forgetChannel';
 
 /**
- * Load all slash commands
+ * Load all slash commands for ArchiveMind bot
  */
 export async function loadCommands(): Promise<SlashCommand[]> {
   return [
@@ -21,5 +23,7 @@ export async function loadCommands(): Promise<SlashCommand[]> {
     statsCommand,
     helpCommand,
     extractResourcesCommand,
+    archivesCommand,
+    forgetChannelCommand,
   ];
 }

@@ -94,15 +94,6 @@ export const RESOURCE_TYPES = {
 } as const;
 
 /**
- * Channel categorization rules
- */
-export interface CategoryRule {
-  pattern: RegExp;
-  targetCategory: string;
-  description: string;
-}
-
-/**
  * Archive statistics
  */
 export interface ArchiveStats {

@@ -7,7 +7,8 @@ import {
   Routes,
   EmbedBuilder,
   ChannelType,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  MessageFlags
 } from 'discord.js';
 import { PrismaClient } from '@prisma/client';
 import { config } from 'dotenv';
@@ -23,11 +24,11 @@ import { setBotInstance } from './lib/botInstance';
 config();
 
 /**
- * Main Discord bot class for Archivemind
- * Handles channel archiving, resource rescue, and knowledge base management
- * Supports global deployment across multiple Discord servers
+ * ArchiveMind Discord Bot
+ * All-in-one channel lifecycle manager that automates archiving inactive channels
+ * and rescues valuable resources to create a searchable knowledge base
  */
-class ArchivemindBot {
+class ArchiveMindBot {
   public client: Client;
   public prisma: PrismaClient;
   public commands: Collection<string, SlashCommand>;
@@ -55,7 +56,7 @@ class ArchivemindBot {
     // Initialize commands collection
     this.commands = new Collection();
 
-    // Initialize core components (will be set after client is ready)
+    // Initialize core components
     this.archiveManager = new ArchiveManager(this.client, this.prisma);
     this.rescueEngine = new RescueEngine(this.client, this.prisma);
     this.activityMonitor = new ActivityMonitor(this.client, this.prisma);
@@ -69,7 +70,7 @@ class ArchivemindBot {
   private setupEventHandlers(): void {
     // Bot ready event - register global commands
     this.client.once(Events.ClientReady, async (readyClient) => {
-      logger.info(`🚀 Archivemind bot is ready! Logged in as ${readyClient.user.tag}`);
+      logger.info(`🧠 ArchiveMind bot is ready! Logged in as ${readyClient.user.tag}`);
       logger.info(`📊 Connected to ${readyClient.guilds.cache.size} server(s)`);
       
       // Register global slash commands
@@ -78,14 +79,14 @@ class ArchivemindBot {
       // Start activity monitoring
       await this.activityMonitor.startMonitoring();
       
-      logger.info('✅ All systems operational!');
+      logger.info('✅ All systems operational! ArchiveMind is preserving Discord knowledge.');
     });
 
     // New guild join event - setup guild-specific data
     this.client.on(Events.GuildCreate, async (guild) => {
-      logger.info(`🎉 Joined new guild: ${guild.name} (${guild.id})`);
+      logger.info(`🎉 ArchiveMind joined new guild: ${guild.name} (${guild.id})`);
       
-      // Optional: Send welcome message to system channel or owner
+      // Send welcome message to system channel or owner
       await this.sendWelcomeMessage(guild);
       
       // Log guild statistics
@@ -94,7 +95,7 @@ class ArchivemindBot {
 
     // Guild leave event
     this.client.on(Events.GuildDelete, async (guild) => {
-      logger.info(`👋 Left guild: ${guild.name} (${guild.id})`);
+      logger.info(`👋 ArchiveMind left guild: ${guild.name} (${guild.id})`);
       
       // Optional: Clean up guild-specific data
       await this.cleanupGuildData(guild.id);
@@ -117,26 +118,40 @@ class ArchivemindBot {
         await command.execute(interaction);
       } catch (error) {
         logger.error(`❌ Error executing command ${interaction.commandName}:`, error);
-          const errorEmbed = new EmbedBuilder()
-          .setTitle('Command Error')
+        
+        const errorEmbed = new EmbedBuilder()
+          .setTitle('⚠️ Command Error')
           .setDescription('There was an error executing this command. Please try again later.')
           .setColor(0xff0000)
           .setTimestamp();
 
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
-        } else {
-          await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ 
+              embeds: [errorEmbed], 
+              flags: [MessageFlags.Ephemeral] 
+            });
+          } else {
+            await interaction.reply({ 
+              embeds: [errorEmbed], 
+              flags: [MessageFlags.Ephemeral] 
+            });
+          }
+        } catch (responseError) {
+          logger.error('Failed to send error response:', responseError);
         }
       }
-    });    // Message events for activity monitoring and resource extraction
+    });
+
+    // Message events for activity monitoring and resource extraction
     this.client.on(Events.MessageCreate, async (message) => {
       if (message.author.bot) return;
       
       try {
         // Update channel activity
         await this.activityMonitor.updateChannelActivity(message.channel.id);
-          // Extract resources from valuable messages in real-time
+        
+        // Extract resources from valuable messages in real-time
         if (this.rescueEngine.hasValuableContent(message.content, message.attachments.size > 0)) {
           const channelName = 'name' in message.channel ? message.channel.name : 'DM';
           logger.info(`📋 Extracting resources from message by ${message.author.tag} in #${channelName}`);
@@ -174,7 +189,7 @@ class ArchivemindBot {
    */
   private async registerGlobalCommands(): Promise<void> {
     try {
-      logger.info('🔄 Loading slash commands...');
+      logger.info('🔄 Loading ArchiveMind slash commands...');
       
       const commands = await loadCommands();
       
@@ -204,7 +219,8 @@ class ArchivemindBot {
    * Send welcome message when joining a new guild
    */
   private async sendWelcomeMessage(guild: any): Promise<void> {
-    try {      // Find system channel or first text channel
+    try {
+      // Find system channel or first text channel
       const systemChannel = guild.systemChannel || 
         guild.channels.cache.find((channel: any) => 
           channel.type === ChannelType.GuildText && 
@@ -214,8 +230,8 @@ class ArchivemindBot {
       if (!systemChannel) return;
 
       const welcomeEmbed = new EmbedBuilder()
-        .setTitle('🤖 Archivemind Bot')
-        .setDescription('Thanks for adding Archivemind to your server!')
+        .setTitle('🧠 ArchiveMind Bot')
+        .setDescription('Thanks for adding ArchiveMind to your server!')
         .addFields([
           {
             name: '📚 What I do',
@@ -228,19 +244,24 @@ class ArchivemindBot {
             inline: false
           },
           {
+            name: '🗃️ Key Features',
+            value: '• Auto-archive inactive channels with warnings\n• Smart resource rescue (files, links, code)\n• Complete channel restoration\n• Searchable knowledge base\n• GDPR-compliant data management',
+            inline: false
+          },
+          {
             name: '🔐 Permissions Required',
             value: 'I need `Manage Channels`, `Read Message History`, and `Send Messages` permissions to function properly.',
             inline: false
           },
           {
             name: '🔗 Support',
-            value: 'Need help? Check out our [documentation](https://github.com/your-username/archivemind-bot) or contact support.',
+            value: 'Need help? Use `/help` for command information or check our documentation.',
             inline: false
           }
         ])
         .setColor(0x5865F2)
         .setThumbnail(this.client.user?.avatarURL() || '')
-        .setFooter({ text: 'Archivemind • Making Discord knowledge searchable' });
+        .setFooter({ text: 'ArchiveMind • Preserving Discord knowledge, one channel at a time! 🧠📚' });
 
       await systemChannel.send({ embeds: [welcomeEmbed] });
     } catch (error) {
@@ -267,7 +288,6 @@ class ArchivemindBot {
     }
   }
 
-
   /**
    * Start the bot
    */
@@ -280,7 +300,7 @@ class ArchivemindBot {
       // Login to Discord
       await this.client.login(process.env.DISCORD_TOKEN);
     } catch (error) {
-      logger.error('Failed to start bot:', error);
+      logger.error('Failed to start ArchiveMind bot:', error);
       process.exit(1);
     }
   }
@@ -289,7 +309,7 @@ class ArchivemindBot {
    * Gracefully shutdown the bot
    */
   public async shutdown(): Promise<void> {
-    logger.info('🔄 Shutting down Archivemind bot...');
+    logger.info('🔄 Shutting down ArchiveMind bot...');
     
     try {
       // Stop activity monitoring
@@ -301,16 +321,15 @@ class ArchivemindBot {
       // Destroy Discord client
       this.client.destroy();
       
-      logger.info('✅ Bot shutdown complete');
+      logger.info('✅ ArchiveMind shutdown complete');
     } catch (error) {
       logger.error('Error during shutdown:', error);
     }
   }
-
 }
 
 // Create and start the bot
-const bot = new ArchivemindBot();
+const bot = new ArchiveMindBot();
 
 // Handle process termination
 process.on('SIGINT', async () => {
@@ -325,7 +344,7 @@ process.on('SIGTERM', async () => {
 
 // Start the bot
 bot.start().catch((error) => {
-  logger.error('Failed to start bot:', error);
+  logger.error('Failed to start ArchiveMind bot:', error);
   process.exit(1);
 });
 
