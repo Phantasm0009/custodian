@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import { SlashCommand } from '../types';
 import { logger } from '../lib/logger';
 
@@ -30,10 +30,10 @@ export const helpCommand: SlashCommand = {
 
       if (specificCommand) {
         const embed = getCommandHelpEmbed(specificCommand);
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
       } else {
         const embed = getGeneralHelpEmbed();
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
       }
 
       logger.info('Help command executed', {
@@ -48,10 +48,14 @@ export const helpCommand: SlashCommand = {
       
       const errorMessage = 'Sorry, I encountered an error while displaying help information.';
       
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: errorMessage, ephemeral: true });
-      } else {
-        await interaction.reply({ content: errorMessage, ephemeral: true });
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp({ content: errorMessage, flags: [MessageFlags.Ephemeral] });
+        } else {
+          await interaction.reply({ content: errorMessage, flags: [MessageFlags.Ephemeral] });
+        }
+      } catch (responseError) {
+        logger.error('Failed to send error response:', responseError);
       }
     }
   },

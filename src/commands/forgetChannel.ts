@@ -5,7 +5,8 @@ import {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  MessageFlags
 } from 'discord.js';
 import type { SlashCommand } from '../types';
 import { getBotInstance } from '../lib/botInstance';
@@ -49,7 +50,7 @@ export const forgetChannelCommand: SlashCommand = {
     const confirmGdpr = interaction.options.getBoolean('confirm_gdpr', true);
 
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
       if (!interaction.guild) {
         await interaction.editReply({
@@ -177,7 +178,7 @@ export const forgetChannelCommand: SlashCommand = {
       try {
         const confirmation = await interaction.followUp({
           content: '⏰ **Waiting for confirmation...**\n\nClick "CONFIRM DELETION" within 60 seconds to proceed with permanent data deletion.',
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
 
         const collector = interaction.channel?.createMessageComponentCollector({
@@ -189,7 +190,7 @@ export const forgetChannelCommand: SlashCommand = {
           if (buttonInteraction.user.id !== interaction.user.id) {
             await buttonInteraction.reply({
               content: '❌ Only the command initiator can confirm this action.',
-              ephemeral: true
+              flags: [MessageFlags.Ephemeral]
             });
             return;
           }
@@ -272,12 +273,16 @@ export const forgetChannelCommand: SlashCommand = {
 
     } catch (error) {
       logger.error('Error in forget-channel command:', error);
-      await interaction.editReply({
-        embeds: [createErrorEmbed(
-          'Command Error',
-          'An error occurred while processing the forget-channel command.'
-        )]
-      });
+      try {
+        await interaction.editReply({
+          embeds: [createErrorEmbed(
+            'Command Error',
+            'An error occurred while processing the forget-channel command.'
+          )]
+        });
+      } catch (editError) {
+        logger.error('Failed to edit reply:', editError);
+      }
     }
   }
 };
@@ -326,4 +331,13 @@ async function performGdprDeletion(
       resourcesDeleted: targetChannel.resources.length
     });
   });
+}
+
+// Helper function for info embeds (assuming it exists in utils)
+function createInfoEmbed(title: string, description: string): EmbedBuilder {
+  return new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(description)
+    .setColor(0x3498db)
+    .setTimestamp();
 }
