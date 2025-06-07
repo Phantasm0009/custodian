@@ -1,7 +1,11 @@
 {
+<<<<<<< HEAD
   "/_not-found/page": "app/_not-found/page.js",
   "/auth/signin/page": "app/auth/signin/page.js",
   "/page": "app/page.js",
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
   "/dashboard/page": "app/dashboard/page.js"
+=======
+  "/page": "app/page.js"
+>>>>>>> ff2926dac213052e70dd22795681a7675e465ab8
 }
