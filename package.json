@@ -1,7 +1,7 @@
 {
   "name": "archivemind-discord-bot",
   "version": "1.0.0",
-  "description": "Discord bot that archives inactive channels while extracting valuable resources into searchable knowledge bases",
+  "description": "All-in-one channel lifecycle manager that automates archiving inactive channels and rescues valuable resources to create a searchable knowledge base",
   "main": "dist/bot.js",
   "scripts": {
     "build": "tsc",
@@ -28,9 +28,10 @@
     "bot",
     "archive",
     "knowledge-base",
-    "typescript"
+    "typescript",
+    "archivemind"
   ],
-  "author": "Pramod Tiwari",
+  "author": "ArchiveMind Team",
   "license": "MIT",
   "dependencies": {
     "@prisma/client": "^6.9.0",
