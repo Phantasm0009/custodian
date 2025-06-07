@@ -17,7 +17,8 @@ RUN apk add --no-cache \
     gcc \
     g++ \
     make \
-    python3
+    python3 \
+    openssl
 
 # Set working directory
 WORKDIR /app
