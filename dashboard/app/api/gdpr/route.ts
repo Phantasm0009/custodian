@@ -34,13 +34,13 @@ export async function GET() {
         },
         take: 100
       })
-    ])
-
-    // Calculate data retention metrics
+    ])    // Calculate data retention metrics
     const now = new Date()
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)    const dataRetention = {
+    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+
+    const dataRetention = {
       last30Days: recentActivity.filter(a => new Date(a.archivedAt) > thirtyDaysAgo).length,
       last90Days: recentActivity.filter(a => new Date(a.archivedAt) > ninetyDaysAgo).length,
       lastYear: recentActivity.filter(a => new Date(a.archivedAt) > oneYearAgo).length,

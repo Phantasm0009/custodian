@@ -18,6 +18,7 @@ import { formatDate, getResourceTypeIcon, getResourceTypeColor } from '@/lib/uti
 export default function ResourcesPage() {
   const { data: session } = useSession()
   const searchParams = useSearchParams()
+  const guildId = searchParams.get('guild')
   const channelFilter = searchParams.get('channel')
   
   const [resources, setResources] = useState<Resource[]>([])
@@ -27,20 +28,26 @@ export default function ResourcesPage() {
   const [authorFilter, setAuthorFilter] = useState('')
 
   useEffect(() => {
-    fetchResources()
-  }, [search, typeFilter, authorFilter, channelFilter])
-
+    if (guildId) {
+      fetchResources()
+    }
+  }, [guildId, search, typeFilter, authorFilter, channelFilter])
   const fetchResources = async () => {
+    if (!guildId) return
+    
     try {
       setLoading(true)
-      const filters: any = {}
-      if (search) filters.search = search
-      if (typeFilter) filters.type = typeFilter
-      if (authorFilter) filters.author = authorFilter
-      if (channelFilter) filters.channelId = channelFilter
+      const params = new URLSearchParams({ guildId })
+      if (search) params.append('search', search)
+      if (typeFilter) params.append('type', typeFilter)
+      if (authorFilter) params.append('author', authorFilter)
+      if (channelFilter) params.append('channelId', channelFilter)
       
-      const data = await dashboardApi.getResources(filters)
-      setResources(data)
+      const response = await fetch(`/api/resources?${params.toString()}`)
+      if (response.ok) {
+        const data = await response.json()
+        setResources(data.resources || [])
+      }
     } catch (error) {
       console.error('Failed to fetch resources:', error)
     } finally {

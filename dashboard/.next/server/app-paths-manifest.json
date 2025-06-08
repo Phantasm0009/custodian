@@ -1,14 +1,8 @@
 {
-  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
   "/page": "app/page.js",
   "/api/stats/route": "app/api/stats/route.js",
-  "/api/scheduled/route": "app/api/scheduled/route.js",
-  "/api/archived/route": "app/api/archived/route.js",
-  "/api/resources/route": "app/api/resources/route.js",
-  "/api/settings/route": "app/api/settings/route.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/archives/page": "app/dashboard/archives/page.js",
-  "/dashboard/scheduled/page": "app/dashboard/scheduled/page.js",
-  "/dashboard/settings/page": "app/dashboard/settings/page.js",
-  "/dashboard/resources/page": "app/dashboard/resources/page.js"
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/guilds/route": "app/api/guilds/route.js",
+  "/api/channels/route": "app/api/channels/route.js",
+  "/dashboard/page": "app/dashboard/page.js"
 }

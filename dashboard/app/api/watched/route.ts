@@ -4,7 +4,9 @@ import { prisma } from '@/lib/prisma'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const guildId = searchParams.get('guildId')    const watchedChannels = await prisma.watchedChannel.findMany({
+    const guildId = searchParams.get('guildId')
+    
+    const watchedChannels = await prisma.watchedChannel.findMany({
       where: guildId ? { guildId } : {},
       orderBy: { lastActivity: 'desc' },
       select: {
@@ -15,9 +17,10 @@ export async function GET(request: NextRequest) {
         lastActivity: true,
         rescueResources: true,
         watchedSince: true,
-        isActive: true
-      }
-    })    const formattedChannels = watchedChannels.map(channel => ({
+        isActive: true      }
+    })
+    
+    const formattedChannels = watchedChannels.map(channel => ({
       id: channel.id,
       channelId: channel.channelId,
       guildId: channel.guildId,

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
   Brain,
@@ -27,7 +27,18 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const guildId = searchParams.get('guild')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // If no guild is selected, don't show the sidebar
+  if (!guildId) {
+    return null
+  }
+
+  const getHrefWithGuild = (href: string) => {
+    return `${href}?guild=${guildId}`
+  }
 
   return (
     <>
@@ -71,11 +82,12 @@ export function Sidebar() {
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-2">
             {navigation.map((item) => {
+              const hrefWithGuild = getHrefWithGuild(item.href)
               const isActive = pathname === item.href
               return (
                 <Link
                   key={item.name}
-                  href={item.href}
+                  href={hrefWithGuild}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
                     isActive ? 'nav-link-active' : 'nav-link-inactive'

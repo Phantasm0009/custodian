@@ -1,22 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Mock settings data - in a real app, this would come from a database
+    const { searchParams } = new URL(request.url)
+    const guildId = searchParams.get('guildId')
+
+    // If guildId is provided, try to fetch guild-specific settings
+    let guildSettings = null
+    if (guildId) {
+      // Check if the guild has any watched channels (indicating bot presence)
+      const watchedChannels = await prisma.watchedChannel.findFirst({
+        where: { guildId }
+      })
+
+      if (watchedChannels) {
+        // Guild has the bot, load settings (in real app, you'd have a guild_settings table)
+        guildSettings = {
+          guildId,
+          hasBot: true
+        }
+      }
+    }
+
+    // Default settings with guild-specific overrides
     const settings = {
       general: {
         botName: 'ArchiveMind',
-        defaultPrefix: '!',
+        defaultPrefix: guildSettings ? '/' : '!', // Use slash commands if bot is present
         timezone: 'UTC',
         language: 'en',
-        theme: 'dark'
+        theme: 'dark',
+        guildId: guildId || null,
+        hasBot: guildSettings?.hasBot || false
       },
       archive: {
         autoArchiveEnabled: true,
@@ -63,9 +86,42 @@ export async function PUT(request: Request) {
     }
 
     const settings = await request.json()
+    const guildId = settings.general?.guildId
 
-    // Mock settings update - in a real app, this would update the database
-    console.log('Updating settings:', settings)
+    // In a real app, you would save settings to database
+    // For now, we'll just validate and return success
+    
+    if (guildId) {
+      // Validate that the guild has the bot
+      const watchedChannels = await prisma.watchedChannel.findFirst({
+        where: { guildId }
+      })
+
+      if (!watchedChannels) {
+        return NextResponse.json(
+          { error: 'Bot not found in this guild' },
+          { status: 400 }
+        )
+      }
+
+      // Here you would save guild-specific settings
+      // await prisma.guildSettings.upsert({
+      //   where: { guildId },
+      //   create: { guildId, settings },
+      //   update: { settings }
+      // })
+    }
+
+    // Validate prefix
+    if (settings.general?.defaultPrefix) {
+      const prefix = settings.general.defaultPrefix.trim()
+      if (prefix.length === 0 || prefix.length > 5) {
+        return NextResponse.json(
+          { error: 'Prefix must be 1-5 characters long' },
+          { status: 400 }
+        )
+      }
+    }
 
     return NextResponse.json({
       success: true,

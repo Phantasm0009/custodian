@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Save, AlertCircle, CheckCircle, Settings as SettingsIcon, Shield, Bell, Archive, Zap } from 'lucide-react'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
@@ -40,6 +41,9 @@ interface Settings {
 }
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams()
+  const guildId = searchParams.get('guild')
+  
   const [settings, setSettings] = useState<Settings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -48,13 +52,17 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general')
 
   useEffect(() => {
-    fetchSettings()
-  }, [])
+    if (guildId) {
+      fetchSettings()
+    }
+  }, [guildId])
 
   const fetchSettings = async () => {
+    if (!guildId) return
+    
     try {
       setLoading(true)
-      const response = await fetch('/api/settings')
+      const response = await fetch(`/api/settings?guildId=${guildId}`)
       if (!response.ok) throw new Error('Failed to fetch settings')
       const result = await response.json()
       setSettings(result)
@@ -64,9 +72,8 @@ export default function SettingsPage() {
       setLoading(false)
     }
   }
-
   const saveSettings = async () => {
-    if (!settings) return
+    if (!settings || !guildId) return
 
     try {
       setSaving(true)
@@ -74,7 +81,7 @@ export default function SettingsPage() {
       const response = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
+        body: JSON.stringify({ ...settings, guildId })
       })
 
       if (!response.ok) throw new Error('Failed to save settings')

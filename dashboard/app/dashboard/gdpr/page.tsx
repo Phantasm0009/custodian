@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Shield, Download, Trash2, UserX, AlertTriangle, CheckCircle, FileText, Users, Database, Calendar } from 'lucide-react'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { formatNumber, formatDate } from '@/lib/utils'
@@ -36,6 +37,9 @@ interface GDPRAction {
 }
 
 export default function GDPRPage() {
+  const searchParams = useSearchParams()
+  const guildId = searchParams.get('guild')
+  
   const [data, setData] = useState<GDPRData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -44,16 +48,19 @@ export default function GDPRPage() {
   const [reason, setReason] = useState('')
   const [showConfirmDialog, setShowConfirmDialog] = useState<string | null>(null)
   const [recentActions, setRecentActions] = useState<GDPRAction[]>([])
-
   useEffect(() => {
-    fetchGDPRData()
-    loadRecentActions()
-  }, [])
+    if (guildId) {
+      fetchGDPRData()
+      loadRecentActions()
+    }
+  }, [guildId])
 
   const fetchGDPRData = async () => {
+    if (!guildId) return
+    
     try {
       setLoading(true)
-      const response = await fetch('/api/gdpr')
+      const response = await fetch(`/api/gdpr?guildId=${guildId}`)
       if (!response.ok) throw new Error('Failed to fetch GDPR data')
       const result = await response.json()
       setData(result)
@@ -87,7 +94,6 @@ export default function GDPRPage() {
     ]
     setRecentActions(mockActions)
   }
-
   const handleGDPRAction = async (action: 'export_data' | 'delete_user_data' | 'anonymize_data') => {
     if (!userId.trim() || !reason.trim()) {
       setError('Please provide both User ID and reason')
@@ -98,20 +104,47 @@ export default function GDPRPage() {
       setProcessing(action)
       setError(null)
       
-      const response = await fetch('/api/gdpr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, userId, reason })
-      })
+      if (action === 'export_data') {
+        // Handle data export with file download
+        const exportFormat = (document.getElementById('exportFormat') as HTMLSelectElement)?.value || 'json'
+        
+        const response = await fetch(`/api/gdpr/export?userId=${encodeURIComponent(userId)}&format=${exportFormat}`)
+        
+        if (!response.ok) throw new Error('Failed to export data')
+        
+        // Create download link
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.style.display = 'none'
+        a.href = url
+        a.download = `user_data_${userId}_${Date.now()}.${exportFormat}`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        
+        // Add success message
+        setError(null)
+        alert(`Data export completed successfully! File downloaded: user_data_${userId}_${Date.now()}.${exportFormat}`)
+      } else {
+        // Handle other GDPR actions
+        const response = await fetch('/api/gdpr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, userId, reason })
+        })
 
-      if (!response.ok) throw new Error('Failed to process GDPR action')
-      
-      const result = await response.json()
+        if (!response.ok) throw new Error('Failed to process GDPR action')
+        
+        const result = await response.json()
+        alert(`${action.replace('_', ' ')} completed successfully!`)
+      }
       
       // Add to recent actions
       const newAction: GDPRAction = {
         id: Date.now().toString(),
-        type: action.replace('_data', '') as 'export' | 'delete' | 'anonymize',
+        type: action.replace('_data', '').replace('_user', '') as 'export' | 'delete' | 'anonymize',
         status: 'completed',
         userId,
         reason,
@@ -288,8 +321,7 @@ export default function GDPRPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-discord-500 focus:border-discord-500"
                 />
               </div>
-              
-              <div>
+                <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Reason</label>
                 <textarea
                   value={reason}
@@ -298,6 +330,17 @@ export default function GDPRPage() {
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-discord-500 focus:border-discord-500"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
+                <select
+                  id="exportFormat"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-discord-500 focus:border-discord-500"
+                >
+                  <option value="json">JSON</option>
+                  <option value="csv">CSV</option>
+                </select>
               </div>
             </div>
           </div>

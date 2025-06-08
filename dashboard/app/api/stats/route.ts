@@ -4,19 +4,27 @@ import { prisma } from '@/lib/prisma'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const guildId = searchParams.get('guildId')
-
-    // Get basic stats
+    const guildId = searchParams.get('guildId')    // Get basic stats
     const [watchedChannels, archivedChannels, resources] = await Promise.all([
       prisma.watchedChannel.count(guildId ? { where: { guildId } } : {}),
       prisma.archivedChannel.count(guildId ? { where: { guildId } } : {}),
-      prisma.resource.count(guildId ? { where: { guildId } } : {}),
+      prisma.resource.count(guildId ? { 
+        where: { 
+          channel: { 
+            guildId 
+          } 
+        } 
+      } : {}),
     ])
 
     // Get resources by type
     const resourcesByType = await prisma.resource.groupBy({
       by: ['type'],
-      where: guildId ? { guildId } : {},
+      where: guildId ? { 
+        channel: { 
+          guildId 
+        } 
+      } : {},
       _count: { type: true },
     })
 

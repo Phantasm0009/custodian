@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { useSearchParams } from 'next/navigation'
 import { ArchiveBoxIcon, MagnifyingGlassIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { dashboardApi, type ArchivedChannel } from '@/lib/api'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -9,14 +10,19 @@ import { formatDate, formatNumber } from '@/lib/utils'
 
 export default function ArchivesPage() {
   const { data: session } = useSession()
+  const searchParams = useSearchParams()
+  const guildId = searchParams.get('guild')
+  
   const [archives, setArchives] = useState<ArchivedChannel[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filteredArchives, setFilteredArchives] = useState<ArchivedChannel[]>([])
 
   useEffect(() => {
-    fetchArchives()
-  }, [])
+    if (guildId) {
+      fetchArchives()
+    }
+  }, [guildId])
 
   useEffect(() => {
     if (search) {
@@ -32,10 +38,15 @@ export default function ArchivesPage() {
   }, [search, archives])
 
   const fetchArchives = async () => {
+    if (!guildId) return
+    
     try {
       setLoading(true)
-      const data = await dashboardApi.getArchivedChannels()
-      setArchives(data)
+      const response = await fetch(`/api/archived?guildId=${guildId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setArchives(data.channels || [])
+      }
     } catch (error) {
       console.error('Failed to fetch archives:', error)
     } finally {
@@ -44,6 +55,8 @@ export default function ArchivesPage() {
   }
 
   const handleRestore = async (channelId: string) => {
+    if (!guildId) return
+    
     try {
       await dashboardApi.restoreChannel(channelId)
       fetchArchives() // Refresh the list
